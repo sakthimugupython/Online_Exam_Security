@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ exam.title }} - Exam</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --color-1: #03071e; --color-2: #370617; --color-3: #6a040f;
+            --color-4: #9d0208; --color-5: #d00000; --color-6: #dc2f02;
+            --color-7: #e85d04; --color-8: #f48c06; --color-9: #faa307; --color-10: #ffba08;
+        }
+        body { background: #f8f9fa; user-select: none; }
+        .exam-header { background: linear-gradient(135deg, var(--color-1), var(--color-3)); color: #fff; padding: 15px 0; position: fixed; top: 0; left: 0; right: 0; z-index: 1000; }
+        .timer { font-size: 1.5rem; font-weight: bold; color: var(--color-10); }
+        .timer.warning { color: var(--color-5); animation: pulse 1s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .sidebar-nav { position: fixed; left: 0; top: 70px; bottom: 0; width: 250px; background: #fff; border-right: 1px solid #ddd; overflow-y: auto; padding: 15px; }
+        .main-content { margin-left: 250px; margin-top: 70px; padding: 20px; margin-bottom: 100px; }
+        .q-nav-btn { width: 40px; height: 40px; margin: 3px; border: 2px solid #ddd; background: #fff; border-radius: 5px; font-weight: bold; cursor: pointer; }
+        .q-nav-btn.answered { background: var(--color-7); color: #fff; border-color: var(--color-7); }
+        .q-nav-btn.current { border-color: var(--color-1); box-shadow: 0 0 0 2px var(--color-1); }
+        .question-card { background: #fff; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 25px; margin-bottom: 20px; }
+        .option-label { display: block; padding: 12px 15px; margin: 10px 0; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
+        .option-label:hover { border-color: var(--color-8); background: #fff9f0; }
+        .option-label.selected { border-color: var(--color-7); background: #fff3e0; font-weight: bold; }
+        .btn-primary { background: var(--color-6); border-color: var(--color-6); }
+        .btn-warning { background: var(--color-9); border-color: var(--color-9); color: var(--color-1); }
+        .btn-danger { background: var(--color-4); border-color: var(--color-4); }
+        .btn-success { background: var(--color-7); border-color: var(--color-7); }
+        .nav-buttons { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
+        .nav-buttons button { flex: 1; max-width: 150px; }
+        .webcam-preview { position: fixed; bottom: 20px; right: 20px; width: 200px; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        .webcam-preview video { width: 100%; display: block; }
+        .webcam-status { background: var(--color-1); color: #fff; padding: 5px; text-align: center; font-size: 12px; }
+        .webcam-status.warning { background: var(--color-5); }
+        .fullscreen-overlay { display: none; position: fixed; inset: 0; background: rgba(3,7,30,0.95); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; color: #fff; }
+        .fullscreen-overlay.show { display: flex; }
+    </style>
+</head>
+<body>
+    <div class="exam-header">
+        <div class="container-fluid d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">{{ exam.title }}</h5>
+            <div class="timer" id="timer">--:--</div>
+            <button class="btn btn-danger btn-sm" onclick="submitExam()"><i class="bi bi-check-circle"></i> Submit Exam</button>
+        </div>
+    </div>
+
+    <div class="sidebar-nav">
+        <h6 class="mb-3"><i class="bi bi-list-ol"></i> Questions</h6>
+        <div class="d-flex flex-wrap" id="questionNav"></div>
+        <hr>
+        <div class="small">
+            <div><span class="q-nav-btn answered" style="width:20px;height:20px;display:inline-block;"></span> Answered</div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="question-card" id="questionContainer"></div>
+        <div class="nav-buttons">
+            <button class="btn btn-secondary" id="prevBtn" onclick="prevQuestion()" disabled>
+                <i class="bi bi-chevron-left"></i> Previous
+            </button>
+            <button class="btn btn-primary" id="nextBtn" onclick="nextQuestion()">
+                Next <i class="bi bi-chevron-right"></i>
+            </button>
+        </div>
+    </div>
+
+    <div class="webcam-preview">
+        <video id="webcam" autoplay muted playsinline></video>
+        <div class="webcam-status" id="webcamStatus">Initializing...</div>
+    </div>
+
+    <div class="fullscreen-overlay" id="fullscreenOverlay">
+        <i class="bi bi-fullscreen" style="font-size: 4rem; color: var(--color-10);"></i>
+        <h2 class="mt-3">Fullscreen Required</h2>
+        <p>Please click below to enter fullscreen mode to continue the exam.</p>
+        <button class="btn btn-warning btn-lg" onclick="enterFullscreen()">Enter Fullscreen</button>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
+    <script>
+        const ATTEMPT_ID = {{ attempt.id }};
+        const CSRF_TOKEN = '{{ csrf_token }}';
+        const REMAINING_SECONDS = {{ remaining_seconds }};
+        const QUESTIONS = {{ snapshot.questions|safe }};
+        const QUESTION_ORDER = {{ attempt.question_order|safe }};
+        
+        let currentIndex = 0;
+        let answers = {};
+        let faceModel = null;
+        let lastFaceCheck = Date.now();
+
+        // Load existing answers
+        {% for q in questions %}
+        {% if q.answer %}
+        answers[{{ q.question.id }}] = "{{ q.answer.answer_text|default:''|escapejs }}";
+        {% endif %}
+        {% endfor %}
+
+        // Initialize question nav
+        function initQuestionNav() {
+            const nav = document.getElementById('questionNav');
+            nav.innerHTML = '';
+            QUESTION_ORDER.forEach((_, index) => {
+                const btn = document.createElement('button');
+                btn.className = 'q-nav-btn';
+                btn.textContent = index + 1;
+                btn.dataset.index = index;
+                btn.onclick = () => goToQuestion(index);
+                nav.appendChild(btn);
+            });
+        }
+
+        // Timer
+        let timeLeft = REMAINING_SECONDS;
+        function updateTimer() {
+            const mins = Math.floor(timeLeft / 60);
+            const secs = timeLeft % 60;
+            const timerEl = document.getElementById('timer');
+            timerEl.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            if (timeLeft <= 300) timerEl.classList.add('warning');
+            if (timeLeft <= 0) {
+                submitExam(true);
+                return;
+            }
+            timeLeft--;
+            setTimeout(updateTimer, 1000);
+        }
+        updateTimer();
+
+        // Question rendering
+        function getQuestion(index) {
+            const orderIndex = QUESTION_ORDER[index];
+            return QUESTIONS[orderIndex];
+        }
+
+        function renderQuestion() {
+            const q = getQuestion(currentIndex);
+            let html = `<h5>Question ${currentIndex + 1} of ${QUESTION_ORDER.length}</h5>
+                        <span class="badge bg-secondary">${q.type.toUpperCase()}</span>
+                        <span class="badge bg-info">${q.marks} marks</span>
+                        <hr>
+                        <p class="fs-5"><strong>${q.text}</strong></p>`;
+            
+            if (q.type === 'mcq') {
+                const options = [
+                    {key: 'A', val: q.option_a},
+                    {key: 'B', val: q.option_b},
+                    {key: 'C', val: q.option_c},
+                    {key: 'D', val: q.option_d}
+                ];
+                options.forEach(opt => {
+                    if (opt.val) {
+                        const selected = answers[q.id] === opt.key ? 'selected' : '';
+                        html += `<label class="option-label ${selected}">
+                                    <input type="radio" name="option_${q.id}" value="${opt.key}" 
+                                           ${selected ? 'checked' : ''} 
+                                           onchange="selectOption('${opt.key}', ${q.id})">
+                                    <strong>${opt.key}.</strong> ${opt.val}
+                                </label>`;
+                    }
+                });
+            } else if (q.type === 'truefalse') {
+                ['True', 'False'].forEach(opt => {
+                    const selected = answers[q.id] === opt ? 'selected' : '';
+                    html += `<label class="option-label ${selected}">
+                                <input type="radio" name="option_${q.id}" value="${opt}" 
+                                       ${selected ? 'checked' : ''} 
+                                       onchange="selectOption('${opt}', ${q.id})">
+                                ${opt}
+                            </label>`;
+                });
+            } else {
+                html += `<textarea class="form-control" rows="8" id="answerText" 
+                            onchange="saveTextAnswer(${q.id})" onblur="saveTextAnswer(${q.id})"
+                            placeholder="Type your answer here...">${answers[q.id] || ''}</textarea>`;
+            }
+            
+            document.getElementById('questionContainer').innerHTML = html;
+            updateNavButtons();
+        }
+
+        function selectOption(key, qId) {
+            answers[qId] = key;
+            saveAnswer(qId);
+            updateNavBtn(currentIndex);
+        }
+
+        function saveTextAnswer(qId) {
+            const text = document.getElementById('answerText').value;
+            answers[qId] = text;
+            saveAnswer(qId);
+            updateNavBtn(currentIndex);
+        }
+
+        function saveAnswer(qId) {
+            const q = getQuestion(currentIndex);
+            fetch(`/api/exam/${ATTEMPT_ID}/save-answer/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': CSRF_TOKEN
+                },
+                body: JSON.stringify({
+                    exam_question_id: q.id,
+                    answer_text: answers[qId] || '',
+                    is_marked_for_review: false
+                })
+            });
+        }
+
+        function updateNavBtn(index) {
+            const q = getQuestion(index);
+            const btn = document.querySelector(`.q-nav-btn[data-index="${index}"]`);
+            if (btn) {
+                btn.classList.remove('answered');
+                if (answers[q.id]) btn.classList.add('answered');
+            }
+        }
+
+        function updateNavButtons() {
+            document.querySelectorAll('.q-nav-btn').forEach(btn => btn.classList.remove('current'));
+            document.querySelector(`.q-nav-btn[data-index="${currentIndex}"]`).classList.add('current');
+            document.getElementById('prevBtn').disabled = currentIndex === 0;
+            document.getElementById('nextBtn').disabled = currentIndex === QUESTION_ORDER.length - 1;
+        }
+
+        function goToQuestion(index) {
+            currentIndex = index;
+            renderQuestion();
+        }
+
+        function prevQuestion() {
+            if (currentIndex > 0) goToQuestion(currentIndex - 1);
+        }
+
+        function nextQuestion() {
+            if (currentIndex < QUESTION_ORDER.length - 1) goToQuestion(currentIndex + 1);
+        }
+
+        function submitExam(auto = false) {
+            if (!auto && !confirm('Are you sure you want to submit? You cannot change answers after submission.')) return;
+            fetch(`/api/exam/${ATTEMPT_ID}/submit/`, {
+                method: 'POST',
+                headers: {'X-CSRFToken': CSRF_TOKEN}
+            }).then(r => r.json()).then(data => {
+                if (data.redirect) window.location.href = data.redirect;
+            });
+        }
+
+        // Initialize
+        initQuestionNav();
+        renderQuestion();
+
+
+        // Proctoring
+        function logViolation(type, details = '') {
+            fetch(`/api/exam/${ATTEMPT_ID}/violation/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': CSRF_TOKEN
+                },
+                body: JSON.stringify({ violation_type: type, details: details })
+            });
+        }
+
+        // Tab switch detection
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) logViolation('tab_switch');
+        });
+
+        // Fullscreen detection
+        function checkFullscreen() {
+            const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement;
+            document.getElementById('fullscreenOverlay').classList.toggle('show', !isFullscreen);
+            if (!isFullscreen && document.hasFocus()) logViolation('fullscreen_exit');
+        }
+
+        function enterFullscreen() {
+            const elem = document.documentElement;
+            if (elem.requestFullscreen) elem.requestFullscreen();
+            else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
+        }
+
+        document.addEventListener('fullscreenchange', checkFullscreen);
+        document.addEventListener('webkitfullscreenchange', checkFullscreen);
+
+        // Disable copy/paste/right-click
+        document.addEventListener('copy', e => { e.preventDefault(); logViolation('copy_attempt'); });
+        document.addEventListener('paste', e => { e.preventDefault(); logViolation('paste_attempt'); });
+        document.addEventListener('contextmenu', e => { e.preventDefault(); logViolation('right_click'); });
+        document.addEventListener('keydown', e => {
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'v' || e.key === 'x')) {
+                e.preventDefault();
+                logViolation('copy_attempt');
+            }
+        });
+
+        // Webcam and face detection
+        async function initWebcam() {
+            const video = document.getElementById('webcam');
+            const status = document.getElementById('webcamStatus');
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                status.textContent = 'Camera active';
+                status.classList.remove('warning');
+                
+                // Load face detection model
+                faceModel = await blazeface.load();
+                status.textContent = 'Face detection ready';
+                
+                // Start face detection loop
+                detectFaces();
+            } catch (err) {
+                status.textContent = 'Camera error';
+                status.classList.add('warning');
+                console.error('Webcam error:', err);
+            }
+        }
+
+        async function detectFaces() {
+            if (!faceModel) return;
+            
+            const video = document.getElementById('webcam');
+            const status = document.getElementById('webcamStatus');
+            
+            try {
+                const predictions = await faceModel.estimateFaces(video, false);
+                const now = Date.now();
+                
+                if (predictions.length === 0) {
+                    status.textContent = 'No face detected!';
+                    status.classList.add('warning');
+                    if (now - lastFaceCheck > 5000) {
+                        logViolation('face_not_detected');
+                        lastFaceCheck = now;
+                    }
+                } else if (predictions.length > 1) {
+                    status.textContent = 'Multiple faces!';
+                    status.classList.add('warning');
+                    if (now - lastFaceCheck > 5000) {
+                        logViolation('multiple_faces');
+                        lastFaceCheck = now;
+                    }
+                } else {
+                    status.textContent = 'Face detected ✓';
+                    status.classList.remove('warning');
+                    lastFaceCheck = now;
+                }
+            } catch (err) {
+                console.error('Face detection error:', err);
+            }
+            
+            setTimeout(detectFaces, 2000);
+        }
+
+        // Initialize proctoring
+        initWebcam();
+        setTimeout(enterFullscreen, 1000);
+    </script>
+</body>
+</html>

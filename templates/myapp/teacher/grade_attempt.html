@@ -1,0 +1,136 @@
+{% extends 'myapp/teacher/base.html' %}
+
+{% block title %}Grade - {{ attempt.student.username }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2>Review: {{ attempt.student.username }}</h2>
+        <p class="text-muted mb-0">{{ attempt.exam.title }}</p>
+        <small class="text-muted"><i class="bi bi-clock"></i> <span id="gradeTime">--:--:--</span></small>
+    </div>
+    <div>
+        <span class="badge {% if attempt.status == 'graded' %}bg-success{% else %}bg-warning{% endif %} fs-6">
+            {{ attempt.get_status_display }}
+        </span>
+        <span class="ms-2">Score: <strong id="totalScore">{{ attempt.total_score|default:"--" }}</strong>/{{ attempt.max_score }}</span>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        {% for item in answers_with_questions %}
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between">
+                <span>Q{{ forloop.counter }}: {{ item.question.type|upper }} ({{ item.question.marks }} marks)</span>
+                {% if item.answer.score is not None %}
+                <span class="badge bg-success">Graded: {{ item.answer.score }}</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                <p><strong>{{ item.question.text }}</strong></p>
+                
+                {% if item.question.type == 'mcq' %}
+                <div class="mb-2">
+                    <small class="text-muted">Options:</small>
+                    <ul class="mb-0">
+                        <li {% if item.answer.answer_text == 'A' %}class="text-accent fw-bold"{% endif %}>A: {{ item.question.option_a }}</li>
+                        <li {% if item.answer.answer_text == 'B' %}class="text-accent fw-bold"{% endif %}>B: {{ item.question.option_b }}</li>
+                        <li {% if item.answer.answer_text == 'C' %}class="text-accent fw-bold"{% endif %}>C: {{ item.question.option_c }}</li>
+                        <li {% if item.answer.answer_text == 'D' %}class="text-accent fw-bold"{% endif %}>D: {{ item.question.option_d }}</li>
+                    </ul>
+                </div>
+                {% endif %}
+                
+                <div class="alert {% if item.answer %}alert-info{% else %}alert-secondary{% endif %} mb-2">
+                    <strong>Student Answer:</strong> {{ item.answer.answer_text|default:"No answer" }}
+                </div>
+                
+                {% if item.question.type in 'mcq,truefalse' %}
+                <div class="alert alert-light">
+                    <strong>Correct Answer:</strong> {{ item.question.correct_answer }}
+                    {% if item.answer.is_correct %}
+                    <span class="badge bg-success ms-2">Correct</span>
+                    {% elif item.answer %}
+                    <span class="badge bg-danger ms-2">Incorrect</span>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="mt-3">
+                    <label class="form-label">Grade this answer (max {{ item.question.marks }}):</label>
+                    <div class="input-group" style="max-width: 200px;">
+                        <input type="number" class="form-control" id="score_{{ item.answer.id }}" 
+                               value="{{ item.answer.score|default:'' }}" min="0" max="{{ item.question.marks }}" step="0.5">
+                        {% if item.answer.id %}
+                        <button class="btn btn-primary" onclick="saveGrade({{ item.answer.id }})">Save</button>
+                        {% else %}
+                        <button class="btn btn-secondary" disabled>No Answer</button>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card mb-3">
+            <div class="card-header"><i class="bi bi-exclamation-triangle"></i> Proctoring Violations</div>
+            <div class="card-body">
+                {% if violations %}
+                <ul class="list-group list-group-flush">
+                    {% for v in violations %}
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span>{{ v.get_violation_type_display }}</span>
+                        <small class="text-muted">{{ v.timestamp|date:"H:i:s" }}</small>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted mb-0">No violations recorded.</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <a href="{% url 'teacher_exam_results' attempt.exam.pk %}" class="btn btn-secondary w-100">Back to Results</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function updateGradeTime() {
+    const now = new Date();
+    let hours = now.getHours();
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    hours = String(hours).padStart(2, '0');
+    document.getElementById('gradeTime').textContent = `${hours}:${minutes}:${seconds} ${ampm}`;
+}
+updateGradeTime();
+setInterval(updateGradeTime, 1000);
+
+function saveGrade(answerId) {
+    const score = document.getElementById(`score_${answerId}`).value;
+    fetch(`/teacher/grade/save/${answerId}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `score=${score}`
+    }).then(r => r.json()).then(data => {
+        if (data.success) {
+            document.getElementById('totalScore').textContent = data.total_score;
+            alert('Grade saved!');
+        } else {
+            alert(data.error);
+        }
+    });
+}
+</script>
+{% endblock %}

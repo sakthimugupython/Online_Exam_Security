@@ -1,0 +1,88 @@
+{% extends 'myapp/student/base.html' %}
+
+{% block title %}Student Dashboard{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>My Dashboard</h2>
+    <div class="text-muted">
+        <i class="bi bi-clock"></i> <span id="studentDashTime">--:--:--</span>
+    </div>
+</div>
+<script>
+    function updateStudentDashTime() {
+        const now = new Date();
+        let hours = now.getHours();
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12;
+        hours = hours ? hours : 12;
+        hours = String(hours).padStart(2, '0');
+        document.getElementById('studentDashTime').textContent = `${hours}:${minutes}:${seconds} ${ampm}`;
+    }
+    updateStudentDashTime();
+    setInterval(updateStudentDashTime, 1000);
+</script>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header"><i class="bi bi-file-earmark-play"></i> Available Exams</div>
+            <div class="card-body">
+                {% if available_exams %}
+                <div class="list-group">
+                    {% for exam in available_exams %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="mb-1">{{ exam.title }}</h5>
+                            <small class="text-muted">
+                                Duration: {{ exam.duration_minutes }} min
+                            </small>
+                        </div>
+                        <a href="{% url 'student_start_exam' exam.pk %}" class="btn btn-warning">
+                            <i class="bi bi-play-fill"></i> Start Exam
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-4">No exams available right now.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-clock-history"></i> My Attempts</div>
+            <div class="card-body">
+                {% if my_attempts %}
+                <ul class="list-group list-group-flush">
+                    {% for attempt in my_attempts %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ attempt.exam.title }}</strong><br>
+                            <small class="text-muted">{{ attempt.started_at|date:"M d, H:i" }}</small>
+                        </div>
+                        <div class="text-end">
+                            {% if attempt.status == 'in_progress' %}
+                            <a href="{% url 'student_take_exam' attempt.pk %}" class="btn btn-sm btn-warning">Continue</a>
+                            {% else %}
+                            <span class="badge {% if attempt.status == 'graded' %}bg-success{% else %}bg-secondary{% endif %}">
+                                {% if attempt.total_score is not None %}{{ attempt.total_score }}/{{ attempt.max_score }}{% else %}{{ attempt.get_status_display }}{% endif %}
+                            </span>
+                            <a href="{% url 'student_result' attempt.pk %}" class="btn btn-sm btn-primary ms-1">View</a>
+                            {% endif %}
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted mb-0">No attempts yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,105 @@
+{% extends 'myapp/student/base.html' %}
+
+{% block title %}Result - {{ attempt.exam.title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2>Exam Result</h2>
+        <small class="text-muted"><i class="bi bi-clock"></i> Submitted: <span id="submitTime">--</span></small>
+    </div>
+    <a href="{% url 'student_dashboard' %}" class="btn btn-secondary">Back to Dashboard</a>
+</div>
+
+<script>
+    function formatSubmitTime() {
+        const submittedAt = new Date('{{ attempt.submitted_at|date:"c" }}');
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const month = months[submittedAt.getMonth()];
+        const date = submittedAt.getDate();
+        const year = submittedAt.getFullYear();
+        
+        let hours = submittedAt.getHours();
+        const minutes = String(submittedAt.getMinutes()).padStart(2, '0');
+        const seconds = String(submittedAt.getSeconds()).padStart(2, '0');
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12;
+        hours = hours ? hours : 12;
+        hours = String(hours).padStart(2, '0');
+        
+        document.getElementById('submitTime').textContent = `${month} ${date}, ${year} ${hours}:${minutes}:${seconds} ${ampm}`;
+    }
+    formatSubmitTime();
+</script>
+
+<div class="card mb-4">
+    <div class="card-header"><i class="bi bi-trophy"></i> {{ attempt.exam.title }}</div>
+    <div class="card-body">
+        <div class="row text-center">
+            <div class="col-md-3">
+                <h3 class="text-accent">{% if attempt.total_score is not None %}{{ attempt.total_score }}{% else %}--{% endif %}</h3>
+                <small class="text-muted">Score</small>
+            </div>
+            <div class="col-md-3">
+                <h3>{{ attempt.max_score }}</h3>
+                <small class="text-muted">Max Score</small>
+            </div>
+            <div class="col-md-3">
+                <h3>{% if attempt.total_score is not None and attempt.max_score %}{% widthratio attempt.total_score attempt.max_score 100 %}%{% else %}--{% endif %}</h3>
+                <small class="text-muted">Percentage</small>
+            </div>
+            <div class="col-md-3">
+                <span class="badge {% if attempt.status == 'graded' %}bg-success{% else %}bg-warning{% endif %} fs-6">
+                    {{ attempt.get_status_display }}
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><i class="bi bi-list-check"></i> Answer Review</div>
+    <div class="card-body">
+        {% for item in answers_with_questions %}
+        <div class="border rounded p-3 mb-3">
+            <div class="d-flex justify-content-between">
+                <span class="badge bg-secondary">Q{{ forloop.counter }} - {{ item.question.type|upper }}</span>
+                <span>
+                    {% if item.answer.score is not None %}
+                    <span class="badge bg-success">{{ item.answer.score }}/{{ item.question.marks }}</span>
+                    {% elif item.answer.is_correct is not None %}
+                        {% if item.answer.is_correct %}
+                        <span class="badge bg-success">Correct</span>
+                        {% else %}
+                        <span class="badge bg-danger">Incorrect</span>
+                        {% endif %}
+                    {% else %}
+                    <span class="badge bg-secondary">Pending</span>
+                    {% endif %}
+                </span>
+            </div>
+            <p class="mt-2 mb-1"><strong>{{ item.question.text }}</strong></p>
+            
+            {% if item.question.type == 'mcq' %}
+            <small class="text-muted">
+                A: {{ item.question.option_a }} | B: {{ item.question.option_b }} | 
+                C: {{ item.question.option_c }} | D: {{ item.question.option_d }}
+            </small>
+            {% endif %}
+            
+            <div class="mt-2">
+                <span class="text-muted">Your answer:</span>
+                <strong>{{ item.answer.answer_text|default:"No answer" }}</strong>
+            </div>
+            
+            {% if item.question.type in 'mcq,truefalse' %}
+            <div>
+                <span class="text-muted">Correct answer:</span>
+                <strong class="text-success">{{ item.question.correct_answer }}</strong>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

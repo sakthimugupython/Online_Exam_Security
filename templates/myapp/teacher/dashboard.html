@@ -1,0 +1,127 @@
+{% extends 'myapp/teacher/base.html' %}
+
+{% block title %}Teacher Dashboard{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Dashboard</h2>
+    <div class="text-muted">
+        <i class="bi bi-clock"></i> <span id="dashboardTime">--:--:--</span>
+    </div>
+</div>
+<script>
+    function updateDashboardTime() {
+        const now = new Date();
+        let hours = now.getHours();
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12;
+        hours = hours ? hours : 12;
+        hours = String(hours).padStart(2, '0');
+        document.getElementById('dashboardTime').textContent = `${hours}:${minutes}:${seconds} ${ampm}`;
+    }
+    updateDashboardTime();
+    setInterval(updateDashboardTime, 1000);
+</script>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body d-flex align-items-center">
+                <div class="stat-icon me-3"><i class="bi bi-question-circle"></i></div>
+                <div>
+                    <h3 class="mb-0">{{ questions_count }}</h3>
+                    <small class="text-muted">Questions</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body d-flex align-items-center">
+                <div class="stat-icon me-3"><i class="bi bi-file-earmark-check"></i></div>
+                <div>
+                    <h3 class="mb-0">{{ published_exams }}</h3>
+                    <small class="text-muted">Published Exams</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body d-flex align-items-center">
+                <div class="stat-icon me-3"><i class="bi bi-people"></i></div>
+                <div>
+                    <h3 class="mb-0">{{ total_attempts }}</h3>
+                    <small class="text-muted">Total Attempts</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-file-earmark-text"></i> Recent Exams</span>
+                <a href="{% url 'teacher_exam_add' %}" class="btn btn-sm btn-warning">+ New Exam</a>
+            </div>
+            <div class="card-body">
+                {% if exams %}
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Duration</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for exam in exams %}
+                        <tr>
+                            <td>{{ exam.title }}</td>
+                            <td>{{ exam.duration_minutes }} min</td>
+                            <td>
+                                {% if exam.is_published %}
+                                <span class="badge badge-published">Published</span>
+                                {% else %}
+                                <span class="badge badge-draft">Draft</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'teacher_exam_detail' exam.pk %}" class="btn btn-sm btn-primary">View</a>
+                                {% if exam.is_published %}
+                                <a href="{% url 'teacher_exam_results' exam.pk %}" class="btn btn-sm btn-success">Results</a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-muted text-center py-4">No exams yet. Create your first exam!</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-lightning"></i> Quick Actions</div>
+            <div class="card-body">
+                <a href="{% url 'teacher_question_add' %}" class="btn btn-primary w-100 mb-2">
+                    <i class="bi bi-plus-circle"></i> Add Question
+                </a>
+                <a href="{% url 'teacher_exam_add' %}" class="btn btn-warning w-100 mb-2">
+                    <i class="bi bi-plus-circle"></i> Create Exam
+                </a>
+                <a href="{% url 'teacher_questions' %}" class="btn btn-outline-secondary w-100">
+                    <i class="bi bi-search"></i> Browse Questions
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

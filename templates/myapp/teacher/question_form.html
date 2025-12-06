@@ -1,0 +1,94 @@
+{% extends 'myapp/teacher/base.html' %}
+
+{% block title %}{% if question %}Edit{% else %}Add{% endif %} Question{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">{% if question %}Edit{% else %}Add{% endif %} Question</h2>
+
+<div class="card">
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Question Type</label>
+                    <select name="question_type" id="questionType" class="form-select" required onchange="toggleOptions()">
+                        <option value="mcq" {% if question.question_type == 'mcq' %}selected{% endif %}>Multiple Choice</option>
+                        <option value="truefalse" {% if question.question_type == 'truefalse' %}selected{% endif %}>True/False</option>
+                        <option value="descriptive" {% if question.question_type == 'descriptive' %}selected{% endif %}>Descriptive</option>
+                        <option value="coding" {% if question.question_type == 'coding' %}selected{% endif %}>Coding</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Marks</label>
+                    <input type="number" name="marks" class="form-control" value="{{ question.marks|default:1 }}" min="1" required>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">Question Text</label>
+                <textarea name="text" class="form-control" rows="4" required>{{ question.text|default:'' }}</textarea>
+            </div>
+            
+            <div id="mcqOptions">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Option A</label>
+                        <input type="text" name="option_a" class="form-control" value="{{ question.option_a|default:'' }}">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Option B</label>
+                        <input type="text" name="option_b" class="form-control" value="{{ question.option_b|default:'' }}">
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Option C</label>
+                        <input type="text" name="option_c" class="form-control" value="{{ question.option_c|default:'' }}">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Option D</label>
+                        <input type="text" name="option_d" class="form-control" value="{{ question.option_d|default:'' }}">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mb-3" id="correctAnswerDiv">
+                <label class="form-label">Correct Answer</label>
+                <input type="text" name="correct_answer" id="correctAnswer" class="form-control" value="{{ question.correct_answer|default:'' }}">
+                <small class="text-muted" id="answerHint">For MCQ: Enter A, B, C, or D. For True/False: Enter True or False.</small>
+            </div>
+            
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">{% if question %}Update{% else %}Create{% endif %} Question</button>
+                <a href="{% url 'teacher_questions' %}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleOptions() {
+    const type = document.getElementById('questionType').value;
+    const mcqOptions = document.getElementById('mcqOptions');
+    const correctDiv = document.getElementById('correctAnswerDiv');
+    const hint = document.getElementById('answerHint');
+    
+    if (type === 'mcq') {
+        mcqOptions.style.display = 'block';
+        correctDiv.style.display = 'block';
+        hint.textContent = 'Enter A, B, C, or D';
+    } else if (type === 'truefalse') {
+        mcqOptions.style.display = 'none';
+        correctDiv.style.display = 'block';
+        hint.textContent = 'Enter True or False';
+    } else {
+        mcqOptions.style.display = 'none';
+        correctDiv.style.display = 'none';
+    }
+}
+toggleOptions();
+</script>
+{% endblock %}
